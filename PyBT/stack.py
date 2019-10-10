@@ -9,22 +9,22 @@ from select import select
 
 log = logging.getLogger("PyBT.stack")
 
+HCIDEVDOWN = 0x400448ca
+HCIDEVUP = 0x400448c9
+
+
 class HCIConfig(object):
     @staticmethod
     def down(iface):
-        # 31 => PF_BLUETOOTH
-        # 0 => HCI_CHANNEL_USER
-        # 0x400448ca => HCIDEVDOWN
         sock = s.socket(31, s.SOCK_RAW, 1)
-        ioctl(sock.fileno(), 0x400448ca, iface)
+        ioctl(sock.fileno(), HCIDEVDOWN, iface)
         sock.close()
         return True
 
     @staticmethod
     def up(iface):
-        sock = s.socket(31, s.SOCK_RAW, iface)
-        # TODO
-        # ioctl(sock.fileno(), HCIDEVUP, 0)
+        sock = s.socket(31, s.SOCK_RAW, 1)
+        ioctl(sock.fileno(), HCIDEVUP, iface)
         sock.close()
         return False
 
@@ -83,9 +83,12 @@ class BTStack:
     def set_advertising_data(self, data):
         self.command(HCI_Cmd_LE_Set_Advertising_Data(data=data))
 
-    def set_advertising_params(self, adv_type, channel_map=0, interval_min=0, interval_max=0, daddr='00:00:00:00:00:00', datype=0):
-        oatype= 1 if self.rand_addr is not None else 0
-        command = HCI_Cmd_LE_Set_Advertising_Parameters(adv_type=adv_type, channel_map=channel_map, interval_min=interval_min, interval_max=interval_max, daddr=daddr, datype=datype, oatype=oatype)
+    def set_advertising_params(self, adv_type, channel_map=0, interval_min=0, interval_max=0, daddr='00:00:00:00:00:00',
+                               datype=0):
+        oatype = 1 if self.rand_addr is not None else 0
+        command = HCI_Cmd_LE_Set_Advertising_Parameters(adv_type=adv_type, channel_map=channel_map,
+                                                        interval_min=interval_min, interval_max=interval_max,
+                                                        daddr=daddr, datype=datype, oatype=oatype)
         self.command(command)
 
     def set_advertising_enable(self, enable):
@@ -100,14 +103,14 @@ class BTStack:
     def handle_data(self):
         p = self.s.recv()
 
-        if p.type == 0x2: # ACL Data (GATT)
+        if p.type == 0x2:  # ACL Data (GATT)
             try:
                 # data = str(p[ATT_Hdr])
                 return BTEvent(BTEvent.ATT_DATA, p[ATT_Hdr])
             except:
                 log.warn("unknown ACL data")
                 pass
-        elif p.type == 0x4: # HCI Event
+        elif p.type == 0x4:  # HCI Event
             if p.code == 0x3e:
                 if p.event == 1:
                     # grorious scapy hack
@@ -131,10 +134,11 @@ class BTStack:
 
     def connect(self, addr, type):
         if self.interval_min is not None and self.interval_max is not None:
-            self.s.send(HCI_Hdr()/HCI_Command_Hdr()/HCI_Cmd_LE_Create_Connection(paddr=addr,patype=type, \
-                        min_interval=self.interval_min, max_interval=self.interval_max))
+            self.s.send(HCI_Hdr() / HCI_Command_Hdr() / HCI_Cmd_LE_Create_Connection(paddr=addr, patype=type, \
+                                                                                     min_interval=self.interval_min,
+                                                                                     max_interval=self.interval_max))
         else:
-            self.s.send(HCI_Hdr()/HCI_Command_Hdr()/HCI_Cmd_LE_Create_Connection(paddr=addr,patype=type))
+            self.s.send(HCI_Hdr() / HCI_Command_Hdr() / HCI_Cmd_LE_Create_Connection(paddr=addr, patype=type))
         # can't use send_command() on this guy because we get a command status (0x0e) and not
         # command complete (0x0f)
         while True:
@@ -156,14 +160,15 @@ class BTStack:
                     raise Exception("Problem establishing connection")
 
     def command(self, cmd):
-        return self.s.send_command(HCI_Hdr()/HCI_Command_Hdr()/cmd)
+        return self.s.send_command(HCI_Hdr() / HCI_Command_Hdr() / cmd)
 
     def raw_att(self, data):
-        self.s.send(HCI_Hdr()/HCI_ACL_Hdr(handle=64)/L2CAP_Hdr(cid=4)/data)
+        self.s.send(HCI_Hdr() / HCI_ACL_Hdr(handle=64) / L2CAP_Hdr(cid=4) / data)
 
     # maybe we want an optional CID parameter
     def raw_l2cap(self, data):
-        self.s.send(HCI_Hdr()/HCI_ACL_Hdr(handle=64)/L2CAP_Hdr()/data)
+        self.s.send(HCI_Hdr() / HCI_ACL_Hdr(handle=64) / L2CAP_Hdr() / data)
+
 
 class BTEvent:
     NONE = 0
